@@ -21,17 +21,17 @@ fn blur(image: Data<>) -> Result<Content<Vec<u8>>, Status> {
         .map_err(|_| Status::InternalServerError)?;
 
     if read == MAX_SIZE as usize {
-        return Err(Status::Forbidden)
+        return Err(Status::PayloadTooLarge)
     }
 
     let reader = Reader::new(Cursor::new(data)).with_guessed_format().expect("Cursor io never fails");
 
     let format = match reader.format() {
         Some(format) => format,
-        None => return Err(Status::NotAcceptable),
+        None => return Err(Status::UnsupportedMediaType),
     };
 
-    let image = reader.decode().map_err(|_| Status::NotAcceptable)?;
+    let image = reader.decode().map_err(|_| Status::InternalServerError)?;
     let image = image.blur(5.0);
 
     let mut out: Vec<u8> = Vec::new();
