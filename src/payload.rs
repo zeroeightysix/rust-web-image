@@ -30,16 +30,25 @@ pub fn image_from_data(image: Data) -> Result<(DynamicImage, ImageFormat), Statu
     Ok((reader.decode().map_err(|_| Status::InternalServerError)?, format))
 }
 
-// do not touch
-pub fn image_to_vec<P, Container>(image: &ImageBuffer<P, Container>) -> Result<Vec<u8>, Status>
+pub trait IntoVec<P> {
+    type Error;
+
+    fn as_vec(&self) -> Result<Vec<P>, Self::Error>;
+}
+
+impl<P, Container> IntoVec<u8> for ImageBuffer<P, Container>
     where P: Pixel<Subpixel=u8> + 'static,
           P::Subpixel: 'static,
           Container: Deref<Target=[P::Subpixel]> {
-    let mut v = Vec::new();
-    let (w, h) = image.dimensions();
-    let bytes = &**image;
-    PngEncoder::new(&mut v)
-        .encode(bytes, w, h, ColorType::Rgba8)
-        .map_err(|_| Status::InternalServerError)?;
-    Ok(v)
+    type Error = Status;
+
+    fn as_vec(&self) -> Result<Vec<u8>, Status> {
+        let mut v = Vec::new();
+        let (w, h) = self.dimensions();
+        let bytes = &**self;
+        PngEncoder::new(&mut v)
+            .encode(bytes, w, h, ColorType::Rgba8)
+            .map_err(|_| Status::InternalServerError)?;
+        Ok(v)
+    }
 }
