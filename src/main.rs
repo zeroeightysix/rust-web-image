@@ -22,6 +22,17 @@ fn blur(image: Data, sigma: f32) -> Result<Content<Vec<u8>>, Status> {
     Ok(Content(ContentType::PNG, image.as_vec()?))
 }
 
+#[post("/unsharpen?<sigma>&<threshold>", data="<image>")]
+fn unsharpen(image: Data, sigma: f32, threshold: i32) -> Result<Content<Vec<u8>>, Status> {
+    let (image, _) = payload::image_from_data(image)?;
+    if sigma <= 0.0 || sigma > 10.0 {
+        return Err(Status::Forbidden)
+    }
+
+    let image = image.unsharpen(sigma, threshold);
+    Ok(Content(ContentType::PNG, image.as_vec()?))
+}
+
 fn main() {
-    rocket::ignite().mount("/", routes![blur]).launch();
+    rocket::ignite().mount("/", routes![blur, unsharpen]).launch();
 }
