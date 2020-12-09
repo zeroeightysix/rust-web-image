@@ -1,6 +1,6 @@
 use rocket::Data;
 use rocket::http::Status;
-use image::{DynamicImage, ImageBuffer, Pixel, ColorType};
+use image::{DynamicImage, ImageBuffer, Pixel, ColorType, ImageOutputFormat};
 use image::ImageFormat;
 use image::io::Reader;
 use std::io::{Cursor, Read};
@@ -42,13 +42,23 @@ impl<P, Container> IntoVec<u8> for ImageBuffer<P, Container>
           Container: Deref<Target=[P::Subpixel]> {
     type Error = Status;
 
-    fn as_vec(&self) -> Result<Vec<u8>, Status> {
+    fn as_vec(&self) -> Result<Vec<u8>, Self::Error> {
         let mut v = Vec::new();
         let (w, h) = self.dimensions();
         let bytes = &**self;
         PngEncoder::new(&mut v)
             .encode(bytes, w, h, ColorType::Rgba8)
             .map_err(|_| Status::InternalServerError)?;
+        Ok(v)
+    }
+}
+
+impl IntoVec<u8> for DynamicImage {
+    type Error = Status;
+
+    fn as_vec(&self) -> Result<Vec<u8>, Self::Error> {
+        let mut v = Vec::new();
+        self.write_to(&mut v, ImageOutputFormat::Png).map_err(|_| Status::InternalServerError)?;
         Ok(v)
     }
 }
