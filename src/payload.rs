@@ -1,9 +1,11 @@
 use rocket::Data;
 use rocket::http::Status;
-use image::{DynamicImage, ImageOutputFormat};
+use image::{DynamicImage, ImageBuffer, Pixel, ColorType};
 use image::ImageFormat;
 use image::io::Reader;
 use std::io::{Cursor, Read};
+use image::codecs::png::PngEncoder;
+use std::ops::Deref;
 
 const MAX_SIZE: u64 = 64 * 1_000_000; // 64 MB
 
@@ -28,8 +30,16 @@ pub fn image_from_data(image: Data) -> Result<(DynamicImage, ImageFormat), Statu
     Ok((reader.decode().map_err(|_| Status::InternalServerError)?, format))
 }
 
-pub fn image_to_vec(image: &DynamicImage, format: ImageOutputFormat) -> Result<Vec<u8>, Status> {
-    let mut v: Vec<u8> = Vec::new();
-    image.write_to(&mut v, format).map_err(|_| Status::InternalServerError)?;
+// do not touch
+pub fn image_to_vec<P, Container>(image: &ImageBuffer<P, Container>) -> Result<Vec<u8>, Status>
+    where P: Pixel<Subpixel=u8> + 'static,
+          P::Subpixel: 'static,
+          Container: Deref<Target=[P::Subpixel]> {
+    let mut v = Vec::new();
+    let (w, h) = image.dimensions();
+    let bytes = &**image;
+    PngEncoder::new(&mut v)
+        .encode(bytes, w, h, ColorType::Rgba8)
+        .map_err(|_| Status::InternalServerError)?;
     Ok(v)
 }

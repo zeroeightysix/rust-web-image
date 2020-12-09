@@ -8,15 +8,17 @@ extern crate rocket;
 use rocket::Data;
 use rocket::http::{Status, ContentType};
 use rocket::response::Content;
-use image::ImageOutputFormat;
+use image::RgbaImage;
 
-#[post("/blur", data = "<image>")]
-fn blur(image: Data) -> Result<Content<Vec<u8>>, Status> {
+#[post("/blur/<sigma>", data = "<image>")]
+fn blur(image: Data, sigma: f32) -> Result<Content<Vec<u8>>, Status> {
     let (image, _) = payload::image_from_data(image)?;
+    if sigma <= 0.0 || sigma >= 5.0 {
+        return Err(Status::Forbidden)
+    }
 
-    let image = image.blur(5.0);
-
-    Ok(Content(ContentType::PNG, payload::image_to_vec(&image, ImageOutputFormat::Png)?))
+    let image: RgbaImage = imageproc::filter::gaussian_blur_f32(&image.into_rgba8(), sigma);
+    Ok(Content(ContentType::PNG, payload::image_to_vec(&image)?))
 }
 
 fn main() {
