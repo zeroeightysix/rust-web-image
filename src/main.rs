@@ -1,42 +1,42 @@
 #![feature(proc_macro_hygiene, decl_macro)]
 
 mod payload;
+mod blur;
 
 #[macro_use]
 extern crate rocket;
 
+use rocket::config::{Config, Environment};
 use rocket::Data;
-use rocket::http::{Status, ContentType};
+use rocket::http::{Status};
 use rocket::response::Content;
-use image::RgbaImage;
-use crate::payload::IntoVec;
 
 macro_rules! deny_out_of_range {
     ($expression:ident, $range:expr) => {
         if !$range.contains(&$expression) {
-            return Err(Status::Forbidden)
+            return Err(Status::BadRequest)
         }
     };
 }
 
-#[post("/blur?<sigma>", data = "<image>")]
-fn blur(image: Data, sigma: f32) -> Result<Content<Vec<u8>>, Status> {
-    let (image, _) = payload::image_from_data(image)?;
+#[post("/blur?<sigma>", data = "<data>")]
+fn blur(data: Data, sigma: f32) -> Result<Content<Vec<u8>>, Status> {
+    let image = payload::safe_vector_from_data(data)?;
+    let reader = payload::image_reader_from_data(&image)?;
+    let format = payload::image_format_from_reader(&reader)?;
     deny_out_of_range!(sigma, 0.0 .. 10.0);
 
-    let image: RgbaImage = imageproc::filter::gaussian_blur_f32(&image.into_rgba8(), sigma);
-    Ok(Content(ContentType::PNG, image.as_vec()?))
-}
-
-#[post("/unsharpen?<sigma>&<threshold>", data = "<image>")]
-fn unsharpen(image: Data, sigma: f32, threshold: i32) -> Result<Content<Vec<u8>>, Status> {
-    let (image, _) = payload::image_from_data(image)?;
-    deny_out_of_range!(sigma, 0.0 .. 10.0);
-
-    let image = image.unsharpen(sigma, threshold);
-    Ok(Content(ContentType::PNG, image.as_vec()?))
+    let content = blur::blur_base_on_type(&image, reader, format, sigma);
+    Ok(content)
 }
 
 fn main() {
-    rocket::ignite().mount("/", routes![blur, unsharpen]).launch();
+    let config = Config::build(Environment::Production)
+        .address("0.0.0.0")
+        .port(8000)
+        .finalize().unwrap();
+
+    rocket::custom(config)
+        .mount("/", routes![blur])
+        .launch();
 }
