@@ -6,7 +6,7 @@ use rocket::http::ContentType;
 use gif::{Encoder, Frame, Repeat, DisposalMethod};
 use crate::payload::IntoVec;
 
-pub fn blur_base_on_type(data: &Vec<u8>, image_reader: Reader<Cursor<&Vec<u8>>>, format: ImageFormat, sigma: f32) -> Content<Vec<u8>> {
+pub fn blur_base_on_type(data: &Vec<u8>, image_reader: Reader<Cursor<&Vec<u8>>>, format: ImageFormat, sigma: f32, repeat: i16, delay: u16) -> Content<Vec<u8>> {
     return match format {
         ImageFormat::Gif => {
             let mut decoder = gif::DecodeOptions::new();
@@ -28,21 +28,27 @@ pub fn blur_base_on_type(data: &Vec<u8>, image_reader: Reader<Cursor<&Vec<u8>>>,
                 frames.push(vec)
             }
             let buffer_size = width as usize * height as usize * frames.len() * 2;
-            let mut vec1 = vec![0; buffer_size];
+            let mut out_buffer = vec![0; buffer_size];
             {
-                let mut encoder = Encoder::new(vec1.as_mut_slice(), width, height, &[]).unwrap();
-                encoder.set_repeat(Repeat::Infinite).expect("oh no, couldn't set gif to repeat");
+                let mut encoder = Encoder::new(out_buffer.as_mut_slice(), width, height, &[]).unwrap();
+                let repeat = match repeat {
+                    -1 => Repeat::Infinite,
+                    _ => Repeat::Finite(repeat as u16)
+                };
+
+                encoder.set_repeat(repeat).expect("oh no, couldn't set gif to repeat");
 
                 for frame in frames {
                     let img = RgbaImage::from_raw(width as u32, height as u32, frame).unwrap();
                     let mut image: RgbaImage = imageproc::filter::gaussian_blur_f32(&img, sigma);
                     let mut new_frame = Frame::from_rgba_speed(width, height, image.as_mut(), 10);
                     new_frame.dispose = DisposalMethod::Background;
+                    new_frame.delay = delay;
                     encoder.write_frame(&new_frame).expect("oh no, couldn't write frame");
                 }
             }
 
-            Content(ContentType::GIF, vec1)
+            Content(ContentType::GIF, out_buffer)
         }
         _ => {
             let image: RgbaImage = imageproc::filter::gaussian_blur_f32(&(image_reader.decode().unwrap()).as_mut_rgba8().expect("flushed"), sigma);
