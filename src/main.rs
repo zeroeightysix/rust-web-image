@@ -3,9 +3,6 @@
 #[macro_use]
 extern crate rocket;
 
-use std::env;
-
-use rocket::config::{Config, Environment};
 use rocket::Data;
 use rocket::http::Status;
 use rocket::response::Content;
@@ -51,30 +48,9 @@ fn blur(data: Data, sigma: f32, repeat: i16, delay: u16) -> Result<Content<Vec<u
 }
 
 
-// First argument supplied to the executable will be parsed and used as environment
+// environment is configured in Rocket.toml and can be chosen with the ROCKET_ENV env variable. see https://rocket.rs/v0.4/guide/configuration/
 fn main() {
-    let args: Vec<String> = env::args().collect();
-
-    let mut env_arg = &String::from("development");
-    if args.len() > 1 {
-        env_arg = &args[1];
-    }
-
-    let env: Environment;
-    if env_arg == "production" {
-        env = Environment::Production;
-    } else if env_arg == "staging" {
-        env = Environment::Staging;
-    } else {
-        env = Environment::Development;
-    };
-
-    let config = Config::build(env)
-        .address("0.0.0.0")
-        .port(8000)
-        .finalize().unwrap();
-
-    rocket::custom(config)
+    rocket::ignite()
         .mount("/", routes![blur])
         .launch();
 }
